@@ -2,7 +2,7 @@
   <h1>🚀 Serverless Autoresearch</h1>
   <p><strong>Fully Autonomous, Serverless AI Research Lab</strong></p>
   
-  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+  [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
   [![Cloud Run](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)](#)
   [![Workflows](https://img.shields.io/badge/Google%20Cloud-Workflows-4285F4?logo=googlecloud&logoColor=white)](#)
   [![Gemini API](https://img.shields.io/badge/AI-Gemini%20Flash%20Lite-8E75B2?logo=googleai&logoColor=white)](#)
@@ -39,7 +39,7 @@ Configure your Google Cloud environment:
 ```bash
 export PROJECT_ID=$(gcloud config get-value project)
 export REPO_NAME="autoresearch-repo"
-export BUCKET_NAME="<your-gcs-bucket-name>" # Update this
+export CLOUD_STORAGE_BUCKET="<your-gcs-bucket-name>" # Update this
 export BUCKET_RESULTS_DIR="autoresearch-results"
 export GEMINI_API_KEY="<YOUR_API_KEY>" # Update this
 
@@ -88,6 +88,8 @@ cp ../Dockerfile ../init.sh ../env.sh ../sync.sh ../workflow.yaml .
 
 Submit the container build to Google Cloud Artifact Registry. This will pre-download the PyTorch image and prepare the ML dataset:
 
+> **Customizing the prompt:** The agent's instructions are hardcoded in the `CMD` line of the `Dockerfile`. To change what the agent focuses on, edit the `--prompt` value and rebuild.
+
 ```bash
 gcloud builds submit --tag us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/autoresearch-job .
 ```
@@ -108,7 +110,7 @@ gcloud run jobs create autoresearch-job \
   --no-gpu-zonal-redundancy \
   --set-secrets="GEMINI_API_KEY=gemini-api-key:latest" \
   --set-env-vars="BUCKET_RESULTS_DIR=${BUCKET_RESULTS_DIR}" \
-  --add-volume=name=results-vol,type=cloud-storage,bucket=${BUCKET_NAME} \
+  --add-volume=name=results-vol,type=cloud-storage,bucket=${CLOUD_STORAGE_BUCKET} \
   --add-volume-mount=volume=results-vol,mount-path=/mnt/results \
   --max-retries 0 --task-timeout 1h --region us-central1
 ```
@@ -124,22 +126,17 @@ gcloud workflows deploy autoresearch-study \
   --location=us-central1 \
   --set-env-vars CLOUD_STORAGE_BUCKET=${CLOUD_STORAGE_BUCKET}
 
-# Execute a standard 24-hour baseline study
+# Execute a 24-hour study
 gcloud workflows execute autoresearch-study \
   --location=us-central1 \
   --data='{"hours": 24}'
-
-# Or, pass a custom mission brief directly!
-gcloud workflows execute autoresearch-study \
-  --location=us-central1 \
-  --data='{"hours": 24, "agent_prompt": "Optimize Adam hyperparameters for 5 epochs max"}'
 ```
 
 ---
 
 ## 📊 4. Analyze Results
 
-Your progress and metrics sync regularly to `gs://${BUCKET_NAME}/${BUCKET_RESULTS_DIR}/`.
+Your progress and metrics sync regularly to `gs://${CLOUD_STORAGE_BUCKET}/${BUCKET_RESULTS_DIR}/`.
 
 * **`results.tsv`**: Master ledger of valid hyperparameter mutations and scores.
 * **`train.py`**: The latest, "best" code configuration tested.

@@ -17,15 +17,14 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
+
+# Copy dependency manifest first for layer caching
+COPY pyproject.toml uv.lock ./
+RUN uv sync
+
+# Copy the rest of the source
 COPY . /app
-COPY sync.sh /app/sync.sh
-RUN chmod +x /app/sync.sh
-
-COPY init.sh /app/init.sh
-RUN chmod +x /app/init.sh
-
-COPY env.sh /app/env.sh
-RUN chmod +x /app/env.sh
+RUN chmod +x sync.sh init.sh env.sh
 
 # Patch the agent's instructions to run our sync script after every experiment
 RUN sed -i 's|uv run train.py > run.log 2>&1|&; ./sync.sh|g' program.md
@@ -36,22 +35,20 @@ RUN sed -i 's/DEVICE_BATCH_SIZE = 128/DEVICE_BATCH_SIZE = 16/g' train.py
 # Add a guardrail to program.md to prevent the agent from gaming the random seed
 RUN echo "\nCRITICAL: Do not modify the random seed in train.py. All improvements must come from architecture or hyperparameter changes." >> program.md
 
-
 # Patch program.md to avoid missing "cat" in bash heredocs (prevents <<EOF parsing errors)
 RUN echo "\nCRITICAL: When writing files using heredocs, always prepend 'cat' (e.g., 'cat <<EOF > filename' instead of '<<EOF')." >> program.md
 
 # Patch program.md to remove the interactive confirmation step
 RUN sed -i 's/Once you get confirmation, kick off the experimentation./Do NOT ask for confirmation. Immediately kick off the experimentation LOOP FOREVER./g' program.md
 
-# Install dependencies and prepare data
-RUN uv sync
+# Prepare data
 RUN uv run prepare.py
 
 # Install Gemini CLI globally
 RUN npm install -g @google/gemini-cli
 
-# Set a default prompt, which can be overridden at execution time
-ENV AGENT_PROMPT="Hi have a look at program.md and let's kick off a new experiment!"
-
-# Start the agent evaluation loop using Gemini CLI in headless YOLO mode
-CMD ./init.sh && gemini --prompt "$AGENT_PROMPT" --yolo --model gemini-3.1-flash-lite-preview
+# Start the agent in fully autonomous headless mode
+CMD ./init.sh && gemini \
+    --prompt "Hi have a look at program.md and let's kick off a new experiment!" \
+    --yolo \
+    --model gemini-3.1-flash-lite-preview

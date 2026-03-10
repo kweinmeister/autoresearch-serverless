@@ -14,7 +14,6 @@ main:
           - bucket_name: ${sys.get_env("CLOUD_STORAGE_BUCKET")}
           - target_hours: ${args.hours}
           - current_hour: 0
-          - agent_prompt: ${map.get(args, "agent_prompt")}
           - task_timeout: 3600
           - timeout_buffer: 1800
 
@@ -31,20 +30,10 @@ main:
             next: execute_job_step
         next: end_study
 
-    # Execute the Cloud Run job.
+    # Execute the Cloud Run job using the prompt baked into the container.
     - execute_job_step:
         assign:
           - run_body: {}
-    - check_prompt_for_override:
-        switch:
-          - condition: ${agent_prompt != null}
-            assign:
-              - run_body:
-                  overrides:
-                    containerOverrides:
-                      - env:
-                          - name: "AGENT_PROMPT"
-                            value: ${agent_prompt}
 
     # Use the connector to run the job with a 1-hour timeout.
     - run_job_execution:
@@ -65,9 +54,15 @@ main:
                   - condition: ${"HttpError" in e.tags and e.code == 404}
                     next: create_job
                   - condition: ${"HttpError" in e.tags and e.code == 409}
-                    next: execute_job_step
+                    next: wait_for_conflict
             - raise_error:
                 raise: ${e}
+    - wait_for_conflict:
+        call: sys.sleep
+        args:
+          seconds: 10
+        next: execute_job_step
+
 
     # Increment and loop back for the next hour
     - increment_counter:
@@ -80,7 +75,7 @@ main:
         try:
           call: googleapis.run.v1.namespaces.jobs.create
           args:
-            parent: ${"namespaces/" + project_number}
+            parent: ${"namespaces/" + project_id}
             location: ${region}
             body:
               apiVersion: "run.googleapis.com/v1"
