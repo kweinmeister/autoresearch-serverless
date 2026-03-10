@@ -1,0 +1,140 @@
+# AutoResearch Orchestration Workflow
+# This workflow manages the multi-hour execution of the AutoResearch agent on Cloud Run.
+
+main:
+  params: [args]
+  steps:
+    - init_variables:
+        assign:
+          - project_id: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - project_number: ${sys.get_env("GOOGLE_CLOUD_PROJECT_NUMBER")}
+          - region: "us-central1"
+          - job_name: "autoresearch-job"
+          - image_url: ${"us-central1-docker.pkg.dev/" + project_id + "/autoresearch-repo/autoresearch-job:latest"}
+          - bucket_name: ${sys.get_env("CLOUD_STORAGE_BUCKET")}
+          - target_hours: ${args.hours}
+          - current_hour: 0
+          - agent_prompt: ${map.get(args, "agent_prompt")}
+          - task_timeout: 3600
+          - timeout_buffer: 1800
+
+    # Fail fast if required environment variables are missing
+    - validate_env:
+        switch:
+          - condition: ${bucket_name == ""}
+            raise: "Missing required environment variable CLOUD_STORAGE_BUCKET. Set it with: gcloud workflows deploy ... --set-env-vars CLOUD_STORAGE_BUCKET=your-bucket-name"
+
+    # Multi-hour loop to keep the study running
+    - check_condition:
+        switch:
+          - condition: ${current_hour < target_hours}
+            next: execute_job_step
+        next: end_study
+
+    # Execute the Cloud Run job.
+    - execute_job_step:
+        assign:
+          - run_body: {}
+    - check_prompt_for_override:
+        switch:
+          - condition: ${agent_prompt != null}
+            assign:
+              - run_body:
+                  overrides:
+                    containerOverrides:
+                      - env:
+                          - name: "AGENT_PROMPT"
+                            value: ${agent_prompt}
+
+    # Use the connector to run the job with a 1-hour timeout.
+    - run_job_execution:
+        try:
+          call: googleapis.run.v1.namespaces.jobs.run
+          args:
+            name: ${"namespaces/" + project_id + "/jobs/" + job_name}
+            location: ${region}
+            body: ${run_body}
+            connector_params:
+              timeout: ${task_timeout + timeout_buffer}
+          result: job_execution
+        except:
+          as: e
+          steps:
+            - check_error:
+                switch:
+                  - condition: ${"HttpError" in e.tags and e.code == 404}
+                    next: create_job
+                  - condition: ${"HttpError" in e.tags and e.code == 409}
+                    next: execute_job_step
+            - raise_error:
+                raise: ${e}
+
+    # Increment and loop back for the next hour
+    - increment_counter:
+        assign:
+          - current_hour: ${current_hour + 1}
+        next: check_condition
+
+    # Dynamic Job Creation (only happens if job is missing)
+    - create_job:
+        try:
+          call: googleapis.run.v1.namespaces.jobs.create
+          args:
+            parent: ${"namespaces/" + project_number}
+            location: ${region}
+            body:
+              apiVersion: "run.googleapis.com/v1"
+              kind: "Job"
+              metadata:
+                name: ${job_name}
+                annotations:
+                  run.googleapis.com/launch-stage: "BETA"
+              spec:
+                template:
+                  metadata:
+                    annotations:
+                      run.googleapis.com/gpu-zonal-redundancy-disabled: "true"
+                      run.googleapis.com/execution-environment: "gen2"
+                  spec:
+                    template:
+                      spec:
+                        timeoutSeconds: ${task_timeout}
+                        containers:
+                          - image: ${image_url}
+                            resources:
+                              limits:
+                                cpu: "4"
+                                memory: "16Gi"
+                                nvidia.com/gpu: "1"
+                            env:
+                              - name: "RESUME"
+                                value: "true"
+                              - name: "GEMINI_API_KEY"
+                                valueFrom:
+                                  secretKeyRef:
+                                    name: "gemini-api-key"
+                                    key: "latest"
+                            volumeMounts:
+                              - name: "results-volume"
+                                mountPath: "/mnt/results"
+                        volumes:
+                          - name: "results-volume"
+                            csi:
+                              driver: "gcsfuse.run.googleapis.com"
+                              volumeAttributes:
+                                bucketName: ${bucket_name}
+                        nodeSelector:
+                          run.googleapis.com/accelerator: "nvidia-l4"
+        except:
+          as: e
+          steps:
+            - handle_create_error:
+                switch:
+                  - condition: ${"HttpError" in e.tags and e.code == 409}
+                    next: execute_job_step
+            - raise_create_error:
+                raise: ${e}
+        next: execute_job_step
+
+    - end_study:
+        return: "Research study completed successfully."
