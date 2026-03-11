@@ -42,6 +42,7 @@ export REPO_NAME="autoresearch-repo"
 export CLOUD_STORAGE_BUCKET="<your-gcs-bucket-name>" # Update this
 export BUCKET_RESULTS_DIR="autoresearch-results"
 export GEMINI_API_KEY="<YOUR_API_KEY>" # Update this
+export SA_NAME="autoresearch-sa"
 
 gcloud services enable \
     artifactregistry.googleapis.com \
@@ -50,27 +51,33 @@ gcloud services enable \
     secretmanager.googleapis.com
 ```
 
-Create a secret for your Gemini API key:
+Create a dedicated service account and store your Gemini API key in Secret Manager:
 
 ```bash
+PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
+SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# Create a dedicated service account
+gcloud iam service-accounts create ${SA_NAME} \
+  --display-name="Autoresearch Agent SA"
+
+# Store the API key in Secret Manager and grant access
 echo -n "${GEMINI_API_KEY}" | gcloud secrets create gemini-api-key --data-file=-
 
-PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
 gcloud secrets add-iam-policy-binding gemini-api-key \
-  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/secretmanager.secretAccessor"
 ```
 
-Give the Workflow permissions to manage Cloud Run instances:
+Grant the service account permissions to manage Cloud Run jobs and access storage:
 
 ```bash
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/run.developer" --condition=None
 
-gcloud iam service-accounts add-iam-policy-binding \
-  ${PROJECT_NUMBER}-compute@developer.gserviceaccount.com \
-  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+gcloud iam service-accounts add-iam-policy-binding ${SA_EMAIL} \
+  --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/iam.serviceAccountUser" --project=${PROJECT_ID}
 ```
 
@@ -105,6 +112,7 @@ Create the job template with an L4 GPU enabled:
 ```bash
 gcloud run jobs create autoresearch-job \
   --image us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/autoresearch-job \
+  --service-account ${SA_EMAIL} \
   --execution-environment gen2 \
   --cpu 4 --memory 16Gi --gpu 1 --gpu-type nvidia-l4 \
   --no-gpu-zonal-redundancy \
@@ -142,6 +150,17 @@ Your progress and metrics sync regularly to `gs://${CLOUD_STORAGE_BUCKET}/${BUCK
 * **`train.py`**: The latest, "best" code configuration tested.
 * **`api_tokens.jsonl`**: LLM usage and tracking logs per-experiment.
 * **`run.log`**: Console snapshot of the active training loop.
+
+---
+
+## 🔒 Security Considerations
+
+This project runs an **autonomous AI agent** with `--yolo` mode, which executes shell commands without user confirmation. Please be aware of the following:
+
+* **Autonomous Execution:** The Gemini CLI `--yolo` flag grants the agent unrestricted code execution privileges inside the container. This is required for unattended operation, but means the agent can install packages, make network requests, and modify any file in the workspace.
+* **Sandboxed Environment:** The `gen2` execution environment uses [gVisor](https://gvisor.dev/) for kernel-level container sandboxing, providing defense-in-depth against container escapes.
+* **GCS Trust Boundary:** The GCS bucket stores experiment state (code, git history, logs) that is restored on resume. Ensure your bucket has appropriate [IAM controls](https://cloud.google.com/storage/docs/access-control/iam) to prevent unauthorized writes.
+* **Dedicated Service Account:** This setup uses a purpose-built service account (`autoresearch-sa`) rather than the default compute service account, following the principle of least privilege.
 
 ---
 

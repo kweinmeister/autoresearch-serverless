@@ -12,8 +12,11 @@ RUN git config --global user.email "agent@autoresearch.local" \
     && git config --global user.name "Autoresearch Agent" \
     && git config --global init.defaultBranch master
 
-# Install uv for fast Python package management
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+# Create a non-root user for the autonomous agent
+RUN useradd -m -s /bin/bash researcher
+
+# Install uv for fast Python package management (pinned version)
+RUN curl -LsSf https://astral.sh/uv/0.6.6/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
@@ -24,7 +27,7 @@ RUN uv sync
 
 # Copy the rest of the source
 COPY . /app
-RUN chmod +x sync.sh init.sh env.sh
+RUN chmod +x sync.sh init.sh env.sh && chown -R researcher:researcher /app
 
 # Patch the agent's instructions to run our sync script after every experiment
 RUN sed -i 's|uv run train.py > run.log 2>&1|&; ./sync.sh|g' program.md
@@ -46,6 +49,10 @@ RUN uv run prepare.py
 
 # Install Gemini CLI globally
 RUN npm install -g @google/gemini-cli
+
+# Switch to non-root user
+USER researcher
+ENV HOME=/home/researcher
 
 # Start the agent in fully autonomous headless mode
 CMD ./init.sh && gemini \

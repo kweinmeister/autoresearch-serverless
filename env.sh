@@ -22,4 +22,10 @@ if [ -z "$BUCKET_PATH" ]; then
     fi
 fi
 
+# Validate BUCKET_PATH against path traversal
+if echo "$BUCKET_PATH" | grep -qE '(^/|\.\./)'; then
+    echo "ERROR: BUCKET_PATH contains invalid path components: $BUCKET_PATH"
+    exit 1
+fi
+
 echo "Environment setup complete: BUCKET_PATH=$BUCKET_PATH, RESUME=$RESUME"

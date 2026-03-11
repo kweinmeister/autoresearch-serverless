@@ -12,7 +12,8 @@ tar -czf "/mnt/results/${BUCKET_PATH}/git_history.tar.gz.tmp" .git/ 2>/dev/null 
 # Parse the Gemini CLI session log to record cumulative token usage
 python3 -c "
 import json, glob, os
-files = glob.glob('/root/.gemini/**/chats/session-*.json', recursive=True)
+import pathlib
+files = glob.glob(str(pathlib.Path.home() / '.gemini/**/chats/session-*.json'), recursive=True)
 if files:
     latest = max(files, key=os.path.getctime)
     with open(latest) as f:
@@ -46,4 +47,11 @@ if [ -f /tmp/api_tokens_latest.jsonl ] && [ -s /tmp/api_tokens_latest.jsonl ]; t
     cp /tmp/api_tokens_all.jsonl "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl.tmp" && \
     rm -f "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl" && \
     mv "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl.tmp" "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl"
+fi
+
+# Debug: copy raw Gemini CLI chat logs to GCS for inspection (opt-in)
+if [ "${DEBUG,,}" == "true" ]; then
+    LOGS_DIR="/mnt/results/${BUCKET_PATH}/logs"
+    mkdir -p "$LOGS_DIR"
+    cp "$HOME"/.gemini/**/chats/session-*.json "$LOGS_DIR/" 2>/dev/null || true
 fi

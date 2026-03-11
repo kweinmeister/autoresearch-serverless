@@ -44,7 +44,7 @@ main:
             location: ${region}
             body: ${run_body}
             connector_params:
-              timeout: ${task_timeout + timeout_buffer}
+              timeout: ${target_hours * 3600 + timeout_buffer}
           result: job_execution
         except:
           as: e
@@ -55,6 +55,8 @@ main:
                     next: create_job
                   - condition: ${"HttpError" in e.tags and e.code == 409}
                     next: wait_for_conflict
+                  - condition: ${"TimeoutError" in e.tags}
+                    next: increment_counter
             - raise_error:
                 raise: ${e}
     - wait_for_conflict:
