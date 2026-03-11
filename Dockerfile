@@ -5,7 +5,7 @@ FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 RUN apt-get update && apt-get install -y curl git ca-certificates procps gcc && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Configure git for the autonomous agent
 RUN git config --global user.email "agent@autoresearch.local" \

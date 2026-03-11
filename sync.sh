@@ -38,6 +38,10 @@ if files:
 " > /tmp/api_tokens_latest.jsonl 2>/dev/null || true
 # Append locally, then atomic-move the full file to GCS
 if [ -f /tmp/api_tokens_latest.jsonl ] && [ -s /tmp/api_tokens_latest.jsonl ]; then
+    # On first sync in a new container, seed from GCS to preserve history
+    if [ ! -f /tmp/api_tokens_all.jsonl ]; then
+        cp "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl" /tmp/api_tokens_all.jsonl 2>/dev/null || true
+    fi
     cat /tmp/api_tokens_latest.jsonl >> /tmp/api_tokens_all.jsonl
     cp /tmp/api_tokens_all.jsonl "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl.tmp" && \
     rm -f "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl" && \

@@ -66,7 +66,7 @@ Give the Workflow permissions to manage Cloud Run instances:
 ```bash
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
   --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-  --role="roles/run.admin" --condition=None
+  --role="roles/run.developer" --condition=None
 
 gcloud iam service-accounts add-iam-policy-binding \
   ${PROJECT_NUMBER}-compute@developer.gserviceaccount.com \

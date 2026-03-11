@@ -15,7 +15,7 @@ if [ -z "$BUCKET_PATH" ]; then
         export BUCKET_PATH="${BUCKET_RESULTS_DIR}/default-study"
     else
         # Slugify AGENT_PROMPT: lowercase, replace non-alnum with hyphens, trim prefix
-        PROMPT_CLEAN=$(echo "$AGENT_PROMPT" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g' | sed -E 's/^-//;s/-$//')
+        PROMPT_CLEAN=$(echo "$AGENT_PROMPT" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//')
         PROMPT_PREFIX=$(echo "$PROMPT_CLEAN" | cut -c1-30)
         PROMPT_HASH=$(echo -n "$AGENT_PROMPT" | md5sum | cut -c1-8)
         export BUCKET_PATH="${BUCKET_RESULTS_DIR}/${PROMPT_PREFIX}-${PROMPT_HASH}"
