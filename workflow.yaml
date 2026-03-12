@@ -12,18 +12,18 @@ main:
           - job_name: "autoresearch-job"
           - image_url: ${"us-central1-docker.pkg.dev/" + project_id + "/autoresearch-repo/autoresearch-job:latest"}
           - bucket_name: ${sys.get_env("CLOUD_STORAGE_BUCKET")}
-          
+
           # Optional: study_name is used to isolate results. If blank, it defaults to 'default' in env.sh
           - study_name: ${default(map.get(args, "study_name"), "")}
-          
+
           # Optional: how long each Cloud Run execution should be given to run (default 1 hour = 3600s)
           - job_timeout: ${default(map.get(args, "job_timeout"), 3600)}
-          
+
           # Calculate the total seconds requested for the whole study (args.hours * 3600)
           - hours: ${default(map.get(args, "hours"), 1)}
           - total_seconds: ${hours * 3600}
           - elapsed_seconds: 0
-          
+
           # Buffer added to the orchestrator's timeout to allow Cloud Run to cleanly
           # time out first before the Workflows connector gives up.
           - timeout_buffer: 1800

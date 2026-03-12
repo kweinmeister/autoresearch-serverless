@@ -12,7 +12,9 @@ sync_to_gcs() {
     local src="$1"
     local dest="$DEST/$2"
     if [ -e "$src" ]; then
-        cp -r "$src" "$dest.tmp" && mv "$dest.tmp" "$dest" || log "ERROR: Failed to sync $src to $dest"
+        if ! cp -r "$src" "$dest.tmp" || ! mv "$dest.tmp" "$dest"; then
+            log "ERROR: Failed to sync $src to $dest"
+        fi
     fi
 }
 
@@ -29,25 +31,28 @@ sync_to_gcs run.log run.log
 # Try to find the latest session file in either standard location
 LATEST_SESSION=$(find "$HOME/.gemini" "/app/.gemini" -name 'session-*.json' -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -f2- -d" ")
 
+# Extract cumulative token usage from Gemini CLI session JSON.
+# Handles two session formats: newer (.stats.models[]) and older (.messages[]).
+# Field names also differ across versions (input/prompt, output/candidates).
 if [ -n "$LATEST_SESSION" ]; then
-    jq -c '. as $root | 
-        (if has("stats") and has("models") then .stats.models[] else .messages[] end) | 
-        .tokens as $t | 
+    jq -c '. as $root |
+        (if has("stats") and has("models") then .stats.models[] else .messages[] end) |
+        .tokens as $t |
         {
-            input: ($t.input // $t.prompt // 0), 
-            cached: ($t.cached // 0), 
+            input: ($t.input // $t.prompt // 0),
+            cached: ($t.cached // 0),
             output: ($t.output // $t.candidates // 0)
-        } | 
-        [.] | 
-        reduce .[] as $item ({input:0, cached:0, output:0}; 
-            .input += $item.input | 
-            .cached += $item.cached | 
+        } |
+        [.] |
+        reduce .[] as $item ({input:0, cached:0, output:0};
+            .input += $item.input |
+            .cached += $item.cached |
             .output += $item.output
-        ) | 
+        ) |
         . + {session: ($root | input_filename | split("/") | last)}' "$LATEST_SESSION" | \
-        jq -c -s 'reduce .[] as $item ({input:0, cached:0, output:0, session:.[0].session}; 
-            .input += $item.input | 
-            .cached += $item.cached | 
+        jq -c -s 'reduce .[] as $item ({input:0, cached:0, output:0, session:.[0].session};
+            .input += $item.input |
+            .cached += $item.cached |
             .output += $item.output)' > /tmp/tokens_latest.jsonl 2>> "$DEBUG_LOG"
 else
     log "WARNING: No session files found anywhere!"

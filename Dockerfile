@@ -1,10 +1,10 @@
 # Base image with PyTorch, CUDA, and compiler toolchain for torch.compile
 FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y curl git jq procps && \
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN apt-get update && apt-get install -y --no-install-recommends curl git jq procps && \
     curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
-    apt-get install -y nodejs && \
+    apt-get install -y --no-install-recommends nodejs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user for the autonomous agent

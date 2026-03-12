@@ -99,6 +99,9 @@ Submit the container build to Google Cloud Artifact Registry. This will pre-down
 > **Customizing the prompt:** The agent's instructions are hardcoded in the `CMD` line of the `Dockerfile`. To change what the agent focuses on, edit the `--prompt` value and rebuild.
 
 ```bash
+gcloud artifacts repositories create ${REPO_NAME} \
+  --repository-format=docker --location=us-central1
+
 gcloud builds submit --tag us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/autoresearch-job .
 ```
 
@@ -224,6 +227,7 @@ Finally, update `workflow.yaml` so the dynamic job creation step also includes t
 ```yaml
 # In the create_job step, add the vpcAccess block under body.template.template:
                   vpcAccess:
+                    egress: ALL_TRAFFIC
                     networkInterfaces:
                       - network: "autoresearch-vpc"
                         subnetwork: "autoresearch-subnet"
