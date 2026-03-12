@@ -1,57 +1,69 @@
 #!/bin/bash
 source ./env.sh
-echo "Syncing results to GCS..."
-mkdir -p "/mnt/results/${BUCKET_PATH}"
-# Use atomic writes (write to tmp then move) to avoid GCS FUSE "legacy staged writes" logs
-cp results.tsv "/mnt/results/${BUCKET_PATH}/results.tsv.tmp" && mv "/mnt/results/${BUCKET_PATH}/results.tsv.tmp" "/mnt/results/${BUCKET_PATH}/results.tsv"
-cp train.py "/mnt/results/${BUCKET_PATH}/train.py.tmp" && mv "/mnt/results/${BUCKET_PATH}/train.py.tmp" "/mnt/results/${BUCKET_PATH}/train.py"
-cp run.log "/mnt/results/${BUCKET_PATH}/run.log.tmp" && mv "/mnt/results/${BUCKET_PATH}/run.log.tmp" "/mnt/results/${BUCKET_PATH}/run.log"
 
-tar -czf "/mnt/results/${BUCKET_PATH}/git_history.tar.gz.tmp" .git/ 2>/dev/null && mv "/mnt/results/${BUCKET_PATH}/git_history.tar.gz.tmp" "/mnt/results/${BUCKET_PATH}/git_history.tar.gz"
+DEST="/mnt/results/${BUCKET_PATH}"
+DEBUG_LOG="/tmp/sync_debug.log"
+mkdir -p "$DEST"
 
-# Parse the Gemini CLI session log to record cumulative token usage
-python3 -c "
-import json, glob, os
-import pathlib
-files = glob.glob(str(pathlib.Path.home() / '.gemini/**/chats/session-*.json'), recursive=True)
-if files:
-    latest = max(files, key=os.path.getctime)
-    with open(latest) as f:
-        data = json.load(f)
-    totals = {'input': 0, 'cached': 0, 'output': 0}
-    # Prefer stats summary (has output tokens), fall back to per-message sums
-    stats = data.get('stats', {}).get('models', {})
-    if stats:
-        for model_data in stats.values():
-            t = model_data.get('tokens', {})
-            totals['input'] += t.get('input', t.get('prompt', 0))
-            totals['cached'] += t.get('cached', 0)
-            totals['output'] += t.get('candidates', 0)
-    else:
-        msgs = data.get('messages', [])
-        for x in msgs:
-            t = x.get('tokens', {})
-            totals['input'] += t.get('input', 0)
-            totals['cached'] += t.get('cached', 0)
-            totals['output'] += t.get('output', 0)
-    totals['session'] = os.path.basename(latest)
-    print(json.dumps(totals))
-" > /tmp/api_tokens_latest.jsonl 2>/dev/null || true
-# Append locally, then atomic-move the full file to GCS
-if [ -f /tmp/api_tokens_latest.jsonl ] && [ -s /tmp/api_tokens_latest.jsonl ]; then
-    # On first sync in a new container, seed from GCS to preserve history
-    if [ ! -f /tmp/api_tokens_all.jsonl ]; then
-        cp "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl" /tmp/api_tokens_all.jsonl 2>/dev/null || true
+log() { echo "[sync.sh $(date -u +%H:%M:%S)] $*" >> "$DEBUG_LOG"; }
+
+# Helper to ensure atomic writes to GCS FUSE
+sync_to_gcs() {
+    local src="$1"
+    local dest="$DEST/$2"
+    if [ -e "$src" ]; then
+        cp -r "$src" "$dest.tmp" 2>/dev/null && mv "$dest.tmp" "$dest" 2>/dev/null || true
     fi
-    cat /tmp/api_tokens_latest.jsonl >> /tmp/api_tokens_all.jsonl
-    cp /tmp/api_tokens_all.jsonl "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl.tmp" && \
-    rm -f "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl" && \
-    mv "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl.tmp" "/mnt/results/${BUCKET_PATH}/api_tokens.jsonl"
+}
+
+log "=== sync.sh started ==="
+
+# Sync ledger and git history
+sync_to_gcs results.tsv results.tsv
+
+tar -czf /tmp/git_history.tar.gz .git/ 2>/dev/null
+sync_to_gcs /tmp/git_history.tar.gz git_history.tar.gz
+
+# Token usage tracking
+LATEST_SESSION=$(find "$HOME/.gemini" -name 'session-*.json' -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -f2- -d" ")
+
+if [ -n "$LATEST_SESSION" ]; then
+    jq -c '. as $root | 
+        (if has("stats") and has("models") then .stats.models[] else .messages[] end) | 
+        .tokens as $t | 
+        {
+            input: ($t.input // $t.prompt // 0), 
+            cached: ($t.cached // 0), 
+            output: ($t.output // $t.candidates // 0)
+        } | 
+        [.] | 
+        reduce .[] as $item ({input:0, cached:0, output:0}; 
+            .input += $item.input | 
+            .cached += $item.cached | 
+            .output += $item.output
+        ) | 
+        . + {session: ($root | input_filename | split("/") | last)}' "$LATEST_SESSION" | \
+        jq -c -s 'reduce .[] as $item ({input:0, cached:0, output:0, session:.[0].session}; 
+            .input += $item.input | 
+            .cached += $item.cached | 
+            .output += $item.output)' > /tmp/tokens_latest.jsonl 2>> "$DEBUG_LOG"
+else
+    log "WARNING: No session files found anywhere!"
+    : > /tmp/tokens_latest.jsonl
 fi
 
-# Debug: copy raw Gemini CLI chat logs to GCS for inspection (opt-in)
-if [ "${DEBUG,,}" == "true" ]; then
-    LOGS_DIR="/mnt/results/${BUCKET_PATH}/logs"
-    mkdir -p "$LOGS_DIR"
-    cp "$HOME"/.gemini/**/chats/session-*.json "$LOGS_DIR/" 2>/dev/null || true
+if [ -s /tmp/tokens_latest.jsonl ]; then
+    # On first sync in a new container, seed from GCS to preserve history
+    [ ! -f /tmp/tokens_all.jsonl ] && cp "$DEST/tokens.jsonl" /tmp/tokens_all.jsonl 2>/dev/null || true
+    cat /tmp/tokens_latest.jsonl >> /tmp/tokens_all.jsonl
+    sync_to_gcs /tmp/tokens_all.jsonl tokens.jsonl
 fi
+
+# Copy Gemini CLI chat logs only if DEBUG is enabled
+if [ "${DEBUG:-false}" = "true" ]; then
+    mkdir -p "$DEST/logs"
+    find "$HOME/.gemini" -name 'session-*.json' -type f -exec cp {} "$DEST/logs/" \; 2>/dev/null
+fi
+
+log "=== sync.sh finished ==="
+sync_to_gcs "$DEBUG_LOG" sync_debug.log

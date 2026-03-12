@@ -14,5 +14,6 @@ results.tsv
 run.log
 *.ipynb
 progress.png
-test_json_output.json
 !uv.lock
+workflow.yaml
+README.md

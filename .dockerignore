@@ -15,4 +15,5 @@ results.tsv
 run.log
 *.ipynb
 progress.png
-test_json_output.json
+workflow.yaml
+README.md

@@ -38,11 +38,10 @@ main:
     # Use the connector to run the job with a 1-hour timeout.
     - run_job_execution:
         try:
-          call: googleapis.run.v1.namespaces.jobs.run
+          call: googleapis.run.v2.projects.locations.jobs.run
           args:
-            name: ${"namespaces/" + project_id + "/jobs/" + job_name}
-            location: ${region}
-            body: ${run_body}
+            name: ${"projects/" + project_id + "/locations/" + region + "/jobs/" + job_name}
+            body: {}
             connector_params:
               timeout: ${target_hours * 3600 + timeout_buffer}
           result: job_execution
@@ -75,53 +74,43 @@ main:
     # Dynamic Job Creation (only happens if job is missing)
     - create_job:
         try:
-          call: googleapis.run.v1.namespaces.jobs.create
+          call: googleapis.run.v2.projects.locations.jobs.create
           args:
-            parent: ${"namespaces/" + project_id}
-            location: ${region}
+            parent: ${"projects/" + project_id + "/locations/" + region}
+            jobId: ${job_name}
             body:
-              apiVersion: "run.googleapis.com/v1"
-              kind: "Job"
-              metadata:
-                name: ${job_name}
-                annotations:
-                  run.googleapis.com/launch-stage: "BETA"
-              spec:
+              template:
                 template:
-                  metadata:
-                    annotations:
-                      run.googleapis.com/gpu-zonal-redundancy-disabled: "true"
-                      run.googleapis.com/execution-environment: "gen2"
-                  spec:
-                    template:
-                      spec:
-                        timeoutSeconds: ${task_timeout}
-                        containers:
-                          - image: ${image_url}
-                            resources:
-                              limits:
-                                cpu: "4"
-                                memory: "16Gi"
-                                nvidia.com/gpu: "1"
-                            env:
-                              - name: "RESUME"
-                                value: "true"
-                              - name: "GEMINI_API_KEY"
-                                valueFrom:
-                                  secretKeyRef:
-                                    name: "gemini-api-key"
-                                    key: "latest"
-                            volumeMounts:
-                              - name: "results-volume"
-                                mountPath: "/mnt/results"
-                        volumes:
-                          - name: "results-volume"
-                            csi:
-                              driver: "gcsfuse.run.googleapis.com"
-                              volumeAttributes:
-                                bucketName: ${bucket_name}
-                        nodeSelector:
-                          run.googleapis.com/accelerator: "nvidia-l4"
+                  vpcAccess:
+                    networkInterfaces:
+                      - network: "autoresearch-vpc"
+                        subnetwork: "autoresearch-subnet"
+                  executionEnvironment: "EXECUTION_ENVIRONMENT_GEN2"
+                  timeout: ${string(task_timeout) + "s"}
+                  containers:
+                    - image: ${image_url}
+                      resources:
+                        limits:
+                          cpu: "4"
+                          memory: "16Gi"
+                          "nvidia.com/gpu": "1"
+                      env:
+                        - name: "RESUME"
+                          value: "true"
+                        - name: "GEMINI_API_KEY"
+                          valueSource:
+                            secretKeyRef:
+                              secret: "gemini-api-key"
+                              version: "latest"
+                      volumeMounts:
+                        - name: "results-volume"
+                          mountPath: "/mnt/results"
+                  volumes:
+                    - name: "results-volume"
+                      gcs:
+                        bucket: ${bucket_name}
+                  nodeSelector:
+                    accelerator: "nvidia-l4"
         except:
           as: e
           steps:

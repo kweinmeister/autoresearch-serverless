@@ -8,6 +8,7 @@
   [![Gemini API](https://img.shields.io/badge/AI-Gemini%20Flash%20Lite-8E75B2?logo=googleai&logoColor=white)](#)
 </div>
 
+> **Disclaimer:** This is not an officially supported Google product. This repository is a code sample for informational purposes only and is provided "as-is" without warranty. Use at your own risk and review the [Security Considerations](#-security-considerations) before deploying.
 ---
 
 Deploy Andrej Karpathy's [AutoResearch](https://github.com/karpathy/autoresearch) natively on Google Cloud. This implementation enables you to run multi-day, endless architectural research studies leveraging the best of serverless infrastructure:
@@ -90,7 +91,7 @@ Clone `autoresearch` and copy our serverless components into the root.
 ```bash
 git clone https://github.com/karpathy/autoresearch.git
 cd autoresearch
-cp ../Dockerfile ../init.sh ../env.sh ../sync.sh ../workflow.yaml .
+cp ../Dockerfile ../init.sh ../env.sh ../sync.sh ../workflow.yaml ../.dockerignore ../.gcloudignore .
 ```
 
 Submit the container build to Google Cloud Artifact Registry. This will pre-download the PyTorch image and prepare the ML dataset:
@@ -161,6 +162,80 @@ This project runs an **autonomous AI agent** with `--yolo` mode, which executes 
 * **Sandboxed Environment:** The `gen2` execution environment uses [gVisor](https://gvisor.dev/) for kernel-level container sandboxing, providing defense-in-depth against container escapes.
 * **GCS Trust Boundary:** The GCS bucket stores experiment state (code, git history, logs) that is restored on resume. Ensure your bucket has appropriate [IAM controls](https://cloud.google.com/storage/docs/access-control/iam) to prevent unauthorized writes.
 * **Dedicated Service Account:** This setup uses a purpose-built service account (`autoresearch-sa`) rather than the default compute service account, following the principle of least privilege.
+* **Network Isolation (Optional):** See [below](#%EF%B8%8F-5-optional-network-isolation) to restrict the agent's network access to only Google APIs, blocking all other egress.
+
+---
+
+## 🛡️ 5. (Optional) Network Isolation
+
+By default, the agent has unrestricted network egress. The steps below create an isolated VPC that blocks all outbound traffic except to Google APIs (Gemini and Cloud Storage), preventing the agent from exfiltrating data to external servers.
+
+Create a dedicated VPC and subnet with [Private Google Access](https://cloud.google.com/vpc/docs/configure-private-google-access):
+
+```bash
+gcloud compute networks create autoresearch-vpc --subnet-mode=custom
+
+gcloud compute networks subnets create autoresearch-subnet \
+  --network=autoresearch-vpc --region=us-central1 \
+  --range=10.9.0.0/24 --enable-private-ip-google-access
+```
+
+Add firewall rules to deny all egress, then allow only Google APIs via the [private VIP](https://cloud.google.com/vpc/docs/configure-private-google-access#config-options) (`199.36.153.8/30`):
+
+```bash
+gcloud compute firewall-rules create autoresearch-deny-egress \
+  --network=autoresearch-vpc --direction=EGRESS --action=DENY \
+  --rules=all --destination-ranges=0.0.0.0/0 --priority=65534
+
+gcloud compute firewall-rules create autoresearch-allow-google-apis \
+  --network=autoresearch-vpc --direction=EGRESS --action=ALLOW \
+  --rules=tcp:443 --destination-ranges=199.36.153.8/30 --priority=1000
+```
+
+Configure DNS so that `*.googleapis.com` resolves to the private VIP:
+
+```bash
+gcloud services enable dns.googleapis.com
+
+gcloud dns managed-zones create googleapis-private \
+  --dns-name=googleapis.com. --visibility=private \
+  --networks=autoresearch-vpc \
+  --description="Route Google APIs to private VIP"
+
+gcloud dns record-sets create private.googleapis.com. \
+  --zone=googleapis-private --type=A --ttl=300 \
+  --rrdatas="199.36.153.8,199.36.153.9,199.36.153.10,199.36.153.11"
+
+gcloud dns record-sets create "*.googleapis.com." \
+  --zone=googleapis-private --type=CNAME --ttl=300 \
+  --rrdatas="private.googleapis.com."
+```
+
+Attach the job to the isolated VPC using [Direct VPC egress](https://cloud.google.com/run/docs/configuring/vpc-direct-vpc):
+
+```bash
+gcloud run jobs update autoresearch-job \
+  --network=autoresearch-vpc --subnet=autoresearch-subnet \
+  --vpc-egress=all-traffic --region=us-central1
+```
+
+Finally, update `workflow.yaml` so the dynamic job creation step also includes the VPC settings. Add these annotations to the `create_job` step's `spec.template` metadata:
+
+```yaml
+# In the create_job step, add the vpcAccess block under body.template.template:
+                  vpcAccess:
+                    networkInterfaces:
+                      - network: "autoresearch-vpc"
+                        subnetwork: "autoresearch-subnet"
+```
+
+Then redeploy the workflow:
+
+```bash
+gcloud workflows deploy autoresearch-study \
+  --source=workflow.yaml --location=us-central1 \
+  --set-env-vars CLOUD_STORAGE_BUCKET=$CLOUD_STORAGE_BUCKET
+```
 
 ---
 
