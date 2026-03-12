@@ -1,5 +1,4 @@
 #!/bin/bash
-# shellcheck source=env.sh
 source ./env.sh
 
 DEST="/mnt/results/${BUCKET_PATH}"
