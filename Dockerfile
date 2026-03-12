@@ -1,0 +1,61 @@
+# Base image with PyTorch, CUDA, and compiler toolchain for torch.compile
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN apt-get update && apt-get install -y --no-install-recommends curl git jq procps && \
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user for the autonomous agent
+RUN useradd -m -s /bin/bash researcher
+
+# Install uv using the official multi-stage copy pattern
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Install Gemini CLI
+RUN npm install -g @google/gemini-cli && npm cache clean --force
+
+# Switch to non-root user
+RUN mkdir -p /app && chown researcher:researcher /app
+USER researcher
+ENV HOME=/home/researcher
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+# Configure git
+RUN git config --global user.email "agent@autoresearch.local" \
+    && git config --global user.name "Autoresearch Agent" \
+    && git config --global init.defaultBranch master
+
+# Install Python dependencies
+COPY --chown=researcher:researcher pyproject.toml uv.lock ./
+RUN uv sync
+
+# Pre-download Flash Attention kernels to avoid runtime rate limits and build stalls
+# We try to download the common variant; failures here are tolerated but warned
+RUN uv run python -c "from kernels import get_kernel; get_kernel('kernels-community/flash-attn3')" || echo "Kernel download skipped or failed"
+
+# Copy prepare.py and run it to take advantage of Docker caching
+COPY --chown=researcher:researcher prepare.py ./
+RUN uv run prepare.py
+
+# Copy the rest of the source
+COPY --chown=researcher:researcher . /app
+RUN chmod +x sync.sh init.sh env.sh
+
+# Inline patches
+# Pre-tune batch size for L4 GPUs
+RUN sed -i 's/DEVICE_BATCH_SIZE = 128/DEVICE_BATCH_SIZE = 16/g' train.py
+
+# Remove the interactive confirmation step
+RUN sed -i 's/Once you get confirmation, kick off the experimentation./Do NOT ask for confirmation. Immediately kick off the experimentation LOOP FOREVER./g' program.md
+
+# Patch program.md to run sync script after every experiment
+RUN sed -i 's|uv run train.py > run.log 2>&1|&; ./sync.sh|g' program.md
+
+# Start the agent
+CMD ./init.sh && gemini \
+    --prompt "Hi have a look at program.md and let's kick off a new experiment!" \
+    --yolo \
+    --model gemini-3-flash-preview
