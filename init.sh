@@ -2,6 +2,7 @@
 set -e
 
 # Load environment variables
+# shellcheck source=env.sh
 source ./env.sh
 
 if [ "${RESUME,,}" == "true" ] && [ -f "/mnt/results/${BUCKET_PATH}/git_history.tar.gz" ]; then
