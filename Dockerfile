@@ -54,7 +54,7 @@ RUN sed -i 's/Once you get confirmation, kick off the experimentation./Do NOT as
 RUN sed -i 's|uv run train.py > run.log 2>&1|PYTHONUNBUFFERED=1 &; ./sync.sh|g' program.md
 
 # Instruct the agent to run training synchronously to avoid unproductive polling loops
-RUN echo '\nCRITICAL: Always run training commands synchronously in the foreground. Do NOT use is_background, nohup, or &. Wait for the command to complete, then read run.log for results.' >> program.md
+RUN printf '\nCRITICAL: Always run training commands synchronously in the foreground. Do NOT use is_background, nohup, or &. Wait for the command to complete, then read run.log for results.\n' >> program.md
 
 # Start the agent
 CMD ./init.sh && gemini \
