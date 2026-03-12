@@ -5,31 +5,30 @@
   [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
   [![Cloud Run](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)](#)
   [![Workflows](https://img.shields.io/badge/Google%20Cloud-Workflows-4285F4?logo=googlecloud&logoColor=white)](#)
-  [![Gemini API](https://img.shields.io/badge/AI-Gemini%20Flash%20Lite-8E75B2?logo=googleai&logoColor=white)](#)
+  [![Gemini API](https://img.shields.io/badge/AI-Gemini%20Flash-8E75B2?logo=googleai&logoColor=white)](#)
 </div>
 
-> **Disclaimer:** This is not an officially supported Google product. This repository is a code sample for informational purposes only and is provided "as-is" without warranty. Use at your own risk and review the [Security Considerations](#-security-considerations) before deploying.
+> **Disclaimer:** This is not an officially supported Google product. This repository is a code sample for informational purposes only and is provided "as-is". Use at your own risk and review the [Security Considerations](#-security-considerations) before deploying.
 ---
 
-Deploy Andrej Karpathy's [AutoResearch](https://github.com/karpathy/autoresearch) natively on Google Cloud. This implementation enables you to run multi-day, endless architectural research studies leveraging the best of serverless infrastructure:
+Deploy Andrej Karpathy's [`autoresearch`](https://github.com/karpathy/autoresearch) natively on Google Cloud. This implementation enables you to run multi-day, endless architectural research studies leveraging the best of serverless infrastructure:
 
 * **⚡ Compute:** NVIDIA L4 GPUs on Cloud Run Jobs (Serverless, pay-as-you-go).
-* **🧠 Intelligence:** Gemini 3.1 Flash Lite API for high-quality, low-cost reasoning.
+* **🧠 Intelligence:** Gemini 3 Flash Preview API for high-quality, low-cost reasoning.
 * **💾 Storage:** GCS FUSE mapping Cloud Storage as a persistent "memory" volume.
 * **🚂 Orchestration:** Google Cloud Workflows to chain 1-hour container tasks into endless 24/7 research studies.
 
 ---
 
-## ⏱️ The 1-Hour GPU Constraint
+## ⏱️ How It Works
 
-Cloud Run Jobs utilizing GPUs currently have a **1-hour task timeout**. A **Checkpoint & Resume** architecture is used to enable multi-hour research studies:
+Each Cloud Run Job runs the agent for up to **1 hour** by default—long enough for 6–8 experiments per session. With the [extended GPU timeout waitlist](https://forms.gle/jHoqnwPbsF6uwKru5), you can run a single job for **up to 6 hours**.
 
-1. **Syncing:** A post-hook (`sync.sh`) backs up the workspace state to Cloud Storage after every experiment.
-2. **Resuming:** On startup, `init.sh` automatically reconstructs the research environment from the latest snapshot.
-3. **Chaining:** The included [Cloud Workflow](workflow.yaml) seamlessly triggers a new job immediately after the previous one hits its 1-hour timeout.
+For even longer studies, a built-in **Checkpoint & Resume** architecture chains multiple jobs together seamlessly:
 
-> [!TIP]
-> **Need longer tasks?** Join the waitlist for long-running GPU jobs (up to 6 hours) here: [Google Cloud Waitlist](https://forms.gle/jHoqnwPbsF6uwKru5)
+1. **Sync:** After every experiment, `sync.sh` backs up the workspace (results, git history) to Cloud Storage.
+2. **Resume:** On startup, `init.sh` reconstructs the research environment from the latest checkpoint.
+3. **Chain:** The included [Cloud Workflow](workflow.yaml) automatically triggers a new job when the previous one finishes, creating a continuous research loop that can run for days.
 
 ---
 
@@ -165,7 +164,7 @@ This project runs an **autonomous AI agent** with `--yolo` mode, which executes 
 * **Sandboxed Environment:** The `gen2` execution environment uses [gVisor](https://gvisor.dev/) for kernel-level container sandboxing, providing defense-in-depth against container escapes.
 * **GCS Trust Boundary:** The GCS bucket stores experiment state (code, git history, logs) that is restored on resume. Ensure your bucket has appropriate [IAM controls](https://cloud.google.com/storage/docs/access-control/iam) to prevent unauthorized writes.
 * **Dedicated Service Account:** This setup uses a purpose-built service account (`autoresearch-sa`) rather than the default compute service account, following the principle of least privilege.
-* **Network Isolation (Optional):** See [below](#%EF%B8%8F-5-optional-network-isolation) to restrict the agent's network access to only Google APIs, blocking all other egress.
+* **Network Isolation (Optional):** See below to restrict the agent's network access to only Google APIs, blocking all other egress.
 
 ---
 
