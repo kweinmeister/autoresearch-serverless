@@ -20,7 +20,6 @@ RUN npm install -g @google/gemini-cli && npm cache clean --force
 RUN mkdir -p /app && chown researcher:researcher /app
 USER researcher
 ENV HOME=/home/researcher
-ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Configure git
@@ -51,8 +50,11 @@ RUN sed -i 's/DEVICE_BATCH_SIZE = 128/DEVICE_BATCH_SIZE = 16/g' train.py
 # Remove the interactive confirmation step
 RUN sed -i 's/Once you get confirmation, kick off the experimentation./Do NOT ask for confirmation. Immediately kick off the experimentation LOOP FOREVER./g' program.md
 
-# Patch program.md to run sync script after every experiment
-RUN sed -i 's|uv run train.py > run.log 2>&1|&; ./sync.sh|g' program.md
+# Patch program.md to unbuffer training output and run sync script after every experiment
+RUN sed -i 's|uv run train.py > run.log 2>&1|PYTHONUNBUFFERED=1 &; ./sync.sh|g' program.md
+
+# Instruct the agent to run training synchronously to avoid unproductive polling loops
+RUN echo '\nCRITICAL: Always run training commands synchronously in the foreground. Do NOT use is_background, nohup, or &. Wait for the command to complete, then read run.log for results.' >> program.md
 
 # Start the agent
 CMD ./init.sh && gemini \

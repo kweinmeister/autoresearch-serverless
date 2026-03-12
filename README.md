@@ -123,7 +123,7 @@ gcloud run jobs create autoresearch-job \
   --set-env-vars="BUCKET_RESULTS_DIR=${BUCKET_RESULTS_DIR}" \
   --add-volume=name=results-vol,type=cloud-storage,bucket=${CLOUD_STORAGE_BUCKET} \
   --add-volume-mount=volume=results-vol,mount-path=/mnt/results \
-  --max-retries 0 --task-timeout 1h --region us-central1
+  --max-retries 10 --task-timeout 1h --region us-central1
 ```
 
 ### The Autonomous Workflow (Recommended)
