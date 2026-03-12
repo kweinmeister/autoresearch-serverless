@@ -8,11 +8,9 @@ __pycache__
 *.pyo
 *.pyd
 .python-version
-uv.lock
 results/
 worktrees/
 results.tsv
-run.log
 *.ipynb
 progress.png
 workflow.yaml

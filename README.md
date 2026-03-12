@@ -135,10 +135,10 @@ gcloud workflows deploy autoresearch-study \
   --location=us-central1 \
   --set-env-vars CLOUD_STORAGE_BUCKET=${CLOUD_STORAGE_BUCKET}
 
-# Execute a 24-hour study
+# Execute a 24-hour study, with an optional study name and job timeout (e.g. 6 hours = 21600 seconds)
 gcloud workflows execute autoresearch-study \
   --location=us-central1 \
-  --data='{"hours": 24}'
+  --data='{"hours": 24, "study_name": "gemini-tuning", "job_timeout": 21600}'
 ```
 
 ---

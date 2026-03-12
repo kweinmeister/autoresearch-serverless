@@ -2,8 +2,8 @@
 FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y curl git procps && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+RUN apt-get update && apt-get install -y curl git jq procps && \
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt-get install -y nodejs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -20,6 +20,7 @@ RUN npm install -g @google/gemini-cli && npm cache clean --force
 RUN mkdir -p /app && chown researcher:researcher /app
 USER researcher
 ENV HOME=/home/researcher
+ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Configure git
@@ -31,13 +32,17 @@ RUN git config --global user.email "agent@autoresearch.local" \
 COPY --chown=researcher:researcher pyproject.toml uv.lock ./
 RUN uv sync
 
+# Pre-download Flash Attention kernels to avoid runtime rate limits and build stalls
+# We try to download the common variant; failures here are tolerated but warned
+RUN uv run python -c "from kernels import get_kernel; get_kernel('kernels-community/flash-attn3')" || echo "Kernel download skipped or failed"
+
 # Copy prepare.py and run it to take advantage of Docker caching
 COPY --chown=researcher:researcher prepare.py ./
 RUN uv run prepare.py
 
 # Copy the rest of the source
 COPY --chown=researcher:researcher . /app
-RUN chmod +x sync.sh init.sh env.sh log.sh
+RUN chmod +x sync.sh init.sh env.sh
 
 # Inline patches
 # Pre-tune batch size for L4 GPUs

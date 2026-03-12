@@ -12,9 +12,20 @@ main:
           - job_name: "autoresearch-job"
           - image_url: ${"us-central1-docker.pkg.dev/" + project_id + "/autoresearch-repo/autoresearch-job:latest"}
           - bucket_name: ${sys.get_env("CLOUD_STORAGE_BUCKET")}
-          - target_hours: ${args.hours}
-          - current_hour: 0
-          - task_timeout: 3600
+          
+          # Optional: study_name is used to isolate results. If blank, it defaults to 'default' in env.sh
+          - study_name: ${default(map.get(args, "study_name"), "")}
+          
+          # Optional: how long each Cloud Run execution should be given to run (default 1 hour = 3600s)
+          - job_timeout: ${default(map.get(args, "job_timeout"), 3600)}
+          
+          # Calculate the total seconds requested for the whole study (args.hours * 3600)
+          - hours: ${default(map.get(args, "hours"), 1)}
+          - total_seconds: ${hours * 3600}
+          - elapsed_seconds: 0
+          
+          # Buffer added to the orchestrator's timeout to allow Cloud Run to cleanly
+          # time out first before the Workflows connector gives up.
           - timeout_buffer: 1800
 
     # Fail fast if required environment variables are missing
@@ -26,24 +37,29 @@ main:
     # Multi-hour loop to keep the study running
     - check_condition:
         switch:
-          - condition: ${current_hour < target_hours}
+          - condition: ${elapsed_seconds < total_seconds}
             next: execute_job_step
         next: end_study
 
     # Execute the Cloud Run job using the prompt baked into the container.
     - execute_job_step:
         assign:
-          - run_body: {}
+          - run_body:
+              overrides:
+                containerOverrides:
+                  - env:
+                      - name: "STUDY_NAME"
+                        value: ${study_name}
 
-    # Use the connector to run the job with a 1-hour timeout.
+    # Use the connector to run the job with the requested timeout.
     - run_job_execution:
         try:
           call: googleapis.run.v2.projects.locations.jobs.run
           args:
             name: ${"projects/" + project_id + "/locations/" + region + "/jobs/" + job_name}
-            body: {}
+            body: ${run_body}
             connector_params:
-              timeout: ${target_hours * 3600 + timeout_buffer}
+              timeout: ${job_timeout + timeout_buffer}
           result: job_execution
         except:
           as: e
@@ -64,11 +80,10 @@ main:
           seconds: 10
         next: execute_job_step
 
-
-    # Increment and loop back for the next hour
+    # Increment and loop back for the next execution
     - increment_counter:
         assign:
-          - current_hour: ${current_hour + 1}
+          - elapsed_seconds: ${elapsed_seconds + job_timeout}
         next: check_condition
 
     # Dynamic Job Creation (only happens if job is missing)
@@ -81,12 +96,9 @@ main:
             body:
               template:
                 template:
-                  vpcAccess:
-                    networkInterfaces:
-                      - network: "autoresearch-vpc"
-                        subnetwork: "autoresearch-subnet"
+                  gpuZonalRedundancyDisabled: true
                   executionEnvironment: "EXECUTION_ENVIRONMENT_GEN2"
-                  timeout: ${string(task_timeout) + "s"}
+                  timeout: ${string(job_timeout) + "s"}
                   containers:
                     - image: ${image_url}
                       resources:
@@ -97,6 +109,8 @@ main:
                       env:
                         - name: "RESUME"
                           value: "true"
+                        - name: "STUDY_NAME"
+                          value: ${study_name}
                         - name: "GEMINI_API_KEY"
                           valueSource:
                             secretKeyRef:

@@ -12,7 +12,7 @@ sync_to_gcs() {
     local src="$1"
     local dest="$DEST/$2"
     if [ -e "$src" ]; then
-        cp -r "$src" "$dest.tmp" 2>/dev/null && mv "$dest.tmp" "$dest" 2>/dev/null || true
+        cp -r "$src" "$dest.tmp" && mv "$dest.tmp" "$dest" || log "ERROR: Failed to sync $src to $dest"
     fi
 }
 
@@ -21,11 +21,13 @@ log "=== sync.sh started ==="
 # Sync ledger and git history
 sync_to_gcs results.tsv results.tsv
 
-tar -czf /tmp/git_history.tar.gz .git/ 2>/dev/null
+tar -czf /tmp/git_history.tar.gz .git/ || log "ERROR: Failed to create git history tarball"
 sync_to_gcs /tmp/git_history.tar.gz git_history.tar.gz
+sync_to_gcs run.log run.log
 
 # Token usage tracking
-LATEST_SESSION=$(find "$HOME/.gemini" -name 'session-*.json' -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -f2- -d" ")
+# Try to find the latest session file in either standard location
+LATEST_SESSION=$(find "$HOME/.gemini" "/app/.gemini" -name 'session-*.json' -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -f2- -d" ")
 
 if [ -n "$LATEST_SESSION" ]; then
     jq -c '. as $root | 
