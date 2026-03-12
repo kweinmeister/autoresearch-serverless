@@ -123,8 +123,10 @@ gcloud run jobs create autoresearch-job \
   --set-env-vars="BUCKET_RESULTS_DIR=${BUCKET_RESULTS_DIR}" \
   --add-volume=name=results-vol,type=cloud-storage,bucket=${CLOUD_STORAGE_BUCKET} \
   --add-volume-mount=volume=results-vol,mount-path=/mnt/results \
-  --max-retries 0 --task-timeout 1h --region us-central1
+  --max-retries 10 --task-timeout 1h --region us-central1
 ```
+
+> **Tip:** Each GPU task is capped at 1 hour. Each retry automatically resumes research from where the previous task left off. Set `--max-retries` to however long you want the study to run—10 retries gives you ~11 hours total. The maximum is 10.
 
 ### The Autonomous Workflow (Recommended)
 

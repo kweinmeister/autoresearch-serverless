@@ -12,6 +12,9 @@ if [ "${RESUME,,}" == "true" ] && [ -f "/mnt/results/${BUCKET_PATH}/git_history.
     echo "Resume complete."
 else
     echo "Starting fresh experiment (Resume: $RESUME)."
+    if [ ! -f /app/results.tsv ]; then
+        echo -e "commit\tval_bpb\tmemory_gb\tstatus\tdescription" > /app/results.tsv
+    fi
     if [ ! -d .git ]; then 
         git init
         git add .
