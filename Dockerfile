@@ -1,5 +1,5 @@
 # Base image with PyTorch, CUDA, and compiler toolchain for torch.compile
-FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
+FROM pytorch/pytorch:2.10.0-cuda12.8-cudnn9-devel
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update && apt-get install -y --no-install-recommends curl git jq procps && \
