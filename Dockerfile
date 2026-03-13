@@ -57,7 +57,7 @@ RUN sed -i 's|uv run train.py > run.log 2>&1|PYTHONUNBUFFERED=1 &; ./sync.sh|g' 
 RUN echo "" >> program.md && echo "CRITICAL: Always run training commands synchronously in the foreground. Do NOT use is_background, nohup, or &. Wait for the command to complete, then read run.log for results." >> program.md
 
 # Instruct the agent to handle Flash Attention 3 incompatibility on Blackwell GPUs
-RUN echo "" >> program.md && echo 'CRITICAL: Before running the baseline, check the GPU compute capability with `python3 -c "import torch; print(torch.cuda.get_device_capability())"`. If the major version is 10 or higher (e.g. Blackwell GPUs), Flash Attention 3 does NOT have compatible kernels. You MUST modify train.py to replace the FA3 attention call with torch.nn.functional.scaled_dot_product_attention (SDPA) BEFORE running any experiments. Do not wait for a CUDA error.' >> program.md
+RUN echo "" >> program.md && echo "CRITICAL: Before running the baseline, check the GPU compute capability with \`python3 -c \"import torch; print(torch.cuda.get_device_capability())\"\`. If the major version is 10 or higher (e.g. Blackwell GPUs), Flash Attention 3 does NOT have compatible kernels. You MUST modify train.py to replace the FA3 attention call with torch.nn.functional.scaled_dot_product_attention (SDPA) BEFORE running any experiments. Do not wait for a CUDA error." >> program.md
 
 # Start the agent
 CMD ./init.sh && gemini \
