@@ -1,22 +1,24 @@
 <div align="center">
   <h1>🚀 Serverless Autoresearch</h1>
   <p><strong>Fully Autonomous, Serverless AI Research Lab</strong></p>
-  
-  [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-  [![Cloud Run](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)](#)
-  [![Workflows](https://img.shields.io/badge/Google%20Cloud-Workflows-4285F4?logo=googlecloud&logoColor=white)](#)
-  [![Gemini API](https://img.shields.io/badge/AI-Gemini%20Flash-8E75B2?logo=googleai&logoColor=white)](#)
+
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Cloud Run](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)](#)
+[![Workflows](https://img.shields.io/badge/Google%20Cloud-Workflows-4285F4?logo=googlecloud&logoColor=white)](#)
+[![Gemini API](https://img.shields.io/badge/AI-Gemini%20Flash-8E75B2?logo=googleai&logoColor=white)](#)
+
 </div>
 
 > **Disclaimer:** This is not an officially supported Google product. This repository is a code sample for informational purposes only and is provided "as-is". Use at your own risk and review the [Security Considerations](#-security-considerations) before deploying.
+
 ---
 
 Deploy Andrej Karpathy's [`autoresearch`](https://github.com/karpathy/autoresearch) natively on Google Cloud. This implementation enables you to run multi-day, endless architectural research studies leveraging the best of serverless infrastructure:
 
-* **⚡ Compute:** NVIDIA L4 GPUs on Cloud Run Jobs (Serverless, pay-as-you-go).
-* **🧠 Intelligence:** Gemini 3 Flash Preview API for high-quality, low-cost reasoning.
-* **💾 Storage:** GCS FUSE mapping Cloud Storage as a persistent "memory" volume.
-* **🚂 Orchestration:** Google Cloud Workflows to chain 1-hour container tasks into endless 24/7 research studies.
+- **⚡ Compute:** NVIDIA L4 GPUs on Cloud Run Jobs (Serverless, pay-as-you-go).
+- **🧠 Intelligence:** Gemini 3 Flash Preview API for high-quality, low-cost reasoning.
+- **💾 Storage:** GCS FUSE mapping Cloud Storage as a persistent "memory" volume.
+- **🚂 Orchestration:** Google Cloud Workflows to chain 1-hour container tasks into endless 24/7 research studies.
 
 ---
 
@@ -27,8 +29,8 @@ Each Cloud Run Job runs the agent for up to **1 hour** by default—long enough 
 For even longer studies, a built-in **Checkpoint & Resume** architecture chains multiple jobs together seamlessly:
 
 1. **Sync:** After every experiment, `sync.sh` backs up the workspace (results, git history) to Cloud Storage.
-2. **Resume:** On startup, `init.sh` reconstructs the research environment from the latest checkpoint.
-3. **Chain:** The included [Cloud Workflow](workflow.yaml) automatically triggers a new job when the previous one finishes, creating a continuous research loop that can run for days.
+1. **Resume:** On startup, `init.sh` reconstructs the research environment from the latest checkpoint.
+1. **Chain:** The included [Cloud Workflow](workflow.yaml) automatically triggers a new job when the previous one finishes, creating a continuous research loop that can run for days.
 
 ---
 
@@ -128,6 +130,34 @@ gcloud run jobs create autoresearch-job \
 
 > **Tip:** Each GPU task is capped at 1 hour. Each retry automatically resumes research from where the previous task left off. Set `--max-retries` to however long you want the study to run—10 retries gives you ~11 hours total. The maximum is 10.
 
+### Using NVIDIA RTX PRO 6000 (Preview)
+
+For significantly faster research, you can use the [NVIDIA RTX PRO 6000 Blackwell GPU](https://cloud.google.com/blog/products/serverless/cloud-run-supports-nvidia-rtx-6000-pro-gpus-for-ai-workloads) instead of L4. This provides 96 GB VRAM, 1.6 TB/s bandwidth, and ~6× faster token throughput:
+
+```bash
+gcloud beta run jobs create autoresearch-job \
+  --image us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/autoresearch-job \
+  --service-account ${SA_EMAIL} \
+  --execution-environment gen2 \
+  --cpu 20 --memory 80Gi --gpu 1 --gpu-type nvidia-rtx-pro-6000 \
+  --no-gpu-zonal-redundancy \
+  --set-secrets="GEMINI_API_KEY=gemini-api-key:latest" \
+  --set-env-vars="BUCKET_RESULTS_DIR=${BUCKET_RESULTS_DIR}" \
+  --add-volume=name=results-vol,type=cloud-storage,bucket=${CLOUD_STORAGE_BUCKET} \
+  --add-volume-mount=volume=results-vol,mount-path=/mnt/results \
+  --max-retries 10 --task-timeout 1h --region us-central1
+```
+
+| GPU | NVIDIA L4 | NVIDIA RTX PRO 6000 |
+| --- | --- | --- |
+| **VRAM** | 24 GB | 96 GB |
+| **Min CPU / RAM** | 4 / 16 Gi | 20 / 80 Gi |
+| **Architecture** | Ada Lovelace | Blackwell |
+| **Availability** | GA | Preview (`gcloud beta`) |
+| **Regions** | us-central1, us-east4, europe-west1/4, asia-southeast1 | us-central1, europe-west4 |
+
+> **Note:** The Dockerfile includes an instruction for the agent to automatically detect Blackwell GPUs and replace Flash Attention 3 with PyTorch's built-in SDPA, which currently lacks Blackwell kernels.
+
 ### The Autonomous Workflow (Recommended)
 
 Deploy our orchestration system (contained in [`workflow.yaml`](workflow.yaml)) to manage multi-hour looping.
@@ -151,10 +181,10 @@ gcloud workflows execute autoresearch-study \
 
 Your progress and metrics sync regularly to `gs://${CLOUD_STORAGE_BUCKET}/${BUCKET_RESULTS_DIR}/`.
 
-* **`results.tsv`**: Master ledger of valid hyperparameter mutations and scores.
-* **`train.py`**: The latest, "best" code configuration tested.
-* **`api_tokens.jsonl`**: LLM usage and tracking logs per-experiment.
-* **`run.log`**: Console snapshot of the active training loop.
+- **`results.tsv`**: Master ledger of valid hyperparameter mutations and scores.
+- **`train.py`**: The latest, "best" code configuration tested.
+- **`api_tokens.jsonl`**: LLM usage and tracking logs per-experiment.
+- **`run.log`**: Console snapshot of the active training loop.
 
 ---
 
@@ -162,11 +192,11 @@ Your progress and metrics sync regularly to `gs://${CLOUD_STORAGE_BUCKET}/${BUCK
 
 This project runs an **autonomous AI agent** with `--yolo` mode, which executes shell commands without user confirmation. Please be aware of the following:
 
-* **Autonomous Execution:** The Gemini CLI `--yolo` flag grants the agent unrestricted code execution privileges inside the container. This is required for unattended operation, but means the agent can install packages, make network requests, and modify any file in the workspace.
-* **Sandboxed Environment:** The `gen2` execution environment uses [gVisor](https://gvisor.dev/) for kernel-level container sandboxing, providing defense-in-depth against container escapes.
-* **GCS Trust Boundary:** The GCS bucket stores experiment state (code, git history, logs) that is restored on resume. Ensure your bucket has appropriate [IAM controls](https://cloud.google.com/storage/docs/access-control/iam) to prevent unauthorized writes.
-* **Dedicated Service Account:** This setup uses a purpose-built service account (`autoresearch-sa`) rather than the default compute service account, following the principle of least privilege.
-* **Network Isolation (Optional):** See below to restrict the agent's network access to only Google APIs, blocking all other egress.
+- **Autonomous Execution:** The Gemini CLI `--yolo` flag grants the agent unrestricted code execution privileges inside the container. This is required for unattended operation, but means the agent can install packages, make network requests, and modify any file in the workspace.
+- **Sandboxed Environment:** The `gen2` execution environment uses [gVisor](https://gvisor.dev/) for kernel-level container sandboxing, providing defense-in-depth against container escapes.
+- **GCS Trust Boundary:** The GCS bucket stores experiment state (code, git history, logs) that is restored on resume. Ensure your bucket has appropriate [IAM controls](https://cloud.google.com/storage/docs/access-control/iam) to prevent unauthorized writes.
+- **Dedicated Service Account:** This setup uses a purpose-built service account (`autoresearch-sa`) rather than the default compute service account, following the principle of least privilege.
+- **Network Isolation (Optional):** See below to restrict the agent's network access to only Google APIs, blocking all other egress.
 
 ---
 
