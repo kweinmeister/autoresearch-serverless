@@ -9,7 +9,9 @@ if [ "${RESUME,,}" == "true" ] && [ -f "/mnt/results/${BUCKET_PATH}/git_history.
     echo "Found existing experiment state. Resuming..."
     if tar -xzf "/mnt/results/${BUCKET_PATH}/git_history.tar.gz" -C /app/ --no-same-owner --no-same-permissions && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         git reset --hard HEAD
-        cp "/mnt/results/${BUCKET_PATH}/results.tsv" /app/ 2>/dev/null || true
+        if [ -f "/mnt/results/${BUCKET_PATH}/results.tsv" ]; then
+            cp "/mnt/results/${BUCKET_PATH}/results.tsv" /app/
+        fi
         echo "Resume complete."
         RESUMED=true
     else
