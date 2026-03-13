@@ -22,10 +22,11 @@ USER researcher
 ENV HOME=/home/researcher
 WORKDIR /app
 
-# Configure git
+# Configure git and pre-create .gemini dir to prevent cleanup ENOENT on shutdown
 RUN git config --global user.email "agent@autoresearch.local" \
     && git config --global user.name "Autoresearch Agent" \
-    && git config --global init.defaultBranch master
+    && git config --global init.defaultBranch master \
+    && mkdir -p ${HOME}/.gemini
 
 # Install Python dependencies
 COPY --chown=researcher:researcher pyproject.toml uv.lock ./
@@ -55,6 +56,9 @@ RUN sed -i 's|uv run train.py > run.log 2>&1|PYTHONUNBUFFERED=1 &; ./sync.sh|g' 
 
 # Instruct the agent to run training synchronously to avoid unproductive polling loops
 RUN printf '\nCRITICAL: Always run training commands synchronously in the foreground. Do NOT use is_background, nohup, or &. Wait for the command to complete, then read run.log for results.\n' >> program.md
+
+# Instruct the agent to resume correctly if already on an experiment branch
+RUN printf '\nCRITICAL: Before doing any setup, run `git branch --show-current`. If the current branch already starts with "autoresearch/", you are resuming a previous session. Skip the Setup section entirely and jump directly to the experiment loop using the existing branch and results.tsv.\n' >> program.md
 
 # Start the agent
 CMD ./init.sh && gemini \
