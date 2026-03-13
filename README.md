@@ -11,7 +11,7 @@
 
 > **Disclaimer:** This is not an officially supported Google product. This repository is a code sample for informational purposes only and is provided "as-is". Use at your own risk and review the [Security Considerations](#-security-considerations) before deploying.
 
-______________________________________________________________________
+---
 
 Deploy Andrej Karpathy's [`autoresearch`](https://github.com/karpathy/autoresearch) natively on Google Cloud. This implementation enables you to run multi-day, endless architectural research studies leveraging the best of serverless infrastructure:
 
@@ -20,7 +20,7 @@ Deploy Andrej Karpathy's [`autoresearch`](https://github.com/karpathy/autoresear
 - **💾 Storage:** GCS FUSE mapping Cloud Storage as a persistent "memory" volume.
 - **🚂 Orchestration:** Google Cloud Workflows to chain 1-hour container tasks into endless 24/7 research studies.
 
-______________________________________________________________________
+---
 
 ## ⏱️ How It Works
 
@@ -32,7 +32,7 @@ For even longer studies, a built-in **Checkpoint & Resume** architecture chains 
 1. **Resume:** On startup, `init.sh` reconstructs the research environment from the latest checkpoint.
 1. **Chain:** The included [Cloud Workflow](workflow.yaml) automatically triggers a new job when the previous one finishes, creating a continuous research loop that can run for days.
 
-______________________________________________________________________
+---
 
 ## 🏗️ 1. Environment Setup
 
@@ -83,7 +83,7 @@ gcloud iam service-accounts add-iam-policy-binding ${SA_EMAIL} \
   --role="roles/iam.serviceAccountUser" --project=${PROJECT_ID}
 ```
 
-______________________________________________________________________
+---
 
 ## 📂 2. Prepare & Build
 
@@ -106,7 +106,7 @@ gcloud artifacts repositories create ${REPO_NAME} \
 gcloud builds submit --tag us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/autoresearch-job .
 ```
 
-______________________________________________________________________
+---
 
 ## 🚀 3. Deploy & Execute
 
@@ -175,7 +175,7 @@ gcloud workflows execute autoresearch-study \
   --data='{"hours": 24, "study_name": "gemini-tuning", "job_timeout": 21600}'
 ```
 
-______________________________________________________________________
+---
 
 ## 📊 4. Analyze Results
 
@@ -186,7 +186,7 @@ Your progress and metrics sync regularly to `gs://${CLOUD_STORAGE_BUCKET}/${BUCK
 - **`api_tokens.jsonl`**: LLM usage and tracking logs per-experiment.
 - **`run.log`**: Console snapshot of the active training loop.
 
-______________________________________________________________________
+---
 
 ## 🔒 Security Considerations
 
@@ -198,7 +198,7 @@ This project runs an **autonomous AI agent** with `--yolo` mode, which executes 
 - **Dedicated Service Account:** This setup uses a purpose-built service account (`autoresearch-sa`) rather than the default compute service account, following the principle of least privilege.
 - **Network Isolation (Optional):** See below to restrict the agent's network access to only Google APIs, blocking all other egress.
 
-______________________________________________________________________
+---
 
 ## 🛡️ 5. (Optional) Network Isolation
 
@@ -272,7 +272,7 @@ gcloud workflows deploy autoresearch-study \
   --set-env-vars CLOUD_STORAGE_BUCKET=$CLOUD_STORAGE_BUCKET
 ```
 
-______________________________________________________________________
+---
 
 ## 🤝 Contributing
 
