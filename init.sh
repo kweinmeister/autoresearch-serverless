@@ -7,7 +7,7 @@ source ./env.sh
 RESUMED=false
 if [ "${RESUME,,}" == "true" ] && [ -f "/mnt/results/${BUCKET_PATH}/git_history.tar.gz" ]; then
     echo "Found existing experiment state. Resuming..."
-    if tar -xzf "/mnt/results/${BUCKET_PATH}/git_history.tar.gz" -C /app/ --no-same-owner --no-same-permissions 2>/dev/null; then
+    if tar -xzf "/mnt/results/${BUCKET_PATH}/git_history.tar.gz" -C /app/ --no-same-owner --no-same-permissions; then
         git reset --hard HEAD
         cp "/mnt/results/${BUCKET_PATH}/results.tsv" /app/ 2>/dev/null || true
         echo "Resume complete."
