@@ -33,8 +33,9 @@ RUN uv sync
 
 # Pre-download Flash Attention kernels to avoid runtime rate limits and build stalls
 # We try to download the common variants; failures here are tolerated but warned
-RUN uv run python -c "from kernels import get_kernel; get_kernel('kernels-community/flash-attn3')" || echo "Kernel download for 'kernels-community/flash-attn3' skipped or failed"
-RUN uv run python -c "from kernels import get_kernel; get_kernel('varunneal/flash-attention-3')" || echo "Kernel download for 'varunneal/flash-attention-3' skipped or failed"
+RUN for kernel in "kernels-community/flash-attn3" "varunneal/flash-attention-3"; do \
+        uv run python -c "from kernels import get_kernel; get_kernel('$kernel')" || echo "Kernel download for '$kernel' skipped or failed"; \
+    done
 
 # Copy prepare.py and run it to take advantage of Docker caching
 COPY --chown=researcher:researcher prepare.py ./
