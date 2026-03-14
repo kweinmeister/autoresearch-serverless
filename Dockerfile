@@ -59,16 +59,7 @@ RUN sed -i 's|uv run train.py > run.log 2>&1|PYTHONUNBUFFERED=1 &; ./sync.sh|g' 
 RUN echo "" >> program.md && echo "CRITICAL: Always run training commands synchronously in the foreground. Do NOT use is_background, nohup, or &. Wait for the command to complete, then read run.log for results." >> program.md
 
 # Instruct the agent to select the correct Flash Attention kernel or fallback
-RUN cat <<'EOF' >> program.md
-
-CRITICAL: Before running experiments, you must configure the correct attention mechanism based on the GPU architecture.
-1.  **Check GPU Capability**: Run `python3 -c "import torch; print(torch.cuda.get_device_capability())"`.
-2.  **Update `train.py`**:
-    *   **Blackwell GPUs** (capability major version 10+): You MUST use `torch.nn.functional.scaled_dot_product_attention` (SDPA), as Flash Attention is not compatible.
-    *   **Hopper GPUs** (capability `(9, 0)`): Use the `varunneal/flash-attention-3` package.
-    *   **Other GPUs** (e.g., Ampere with major version 8): Use the `kernels-community/flash-attn3` package.
-Do not wait for a CUDA error to make these changes.
-EOF
+RUN echo -e "\nCRITICAL: Before running experiments, you must configure the correct attention mechanism based on the GPU architecture.\n1.  **Check GPU Capability**: Run \`python3 -c \"import torch; print(torch.cuda.get_device_capability())\"\`.\n2.  **Update \`train.py\`**:\n    *   **Blackwell GPUs** (capability major version 10+): You MUST use \`torch.nn.functional.scaled_dot_product_attention\` (SDPA), as Flash Attention is not compatible.\n    *   **Hopper GPUs** (capability \`(9, 0)\`): Use the \`varunneal/flash-attention-3\` package.\n    *   **Other GPUs** (e.g., Ampere with major version 8): Use the \`kernels-community/flash-attn3\` package.\nDo not wait for a CUDA error to make these changes." >> program.md
 
 # Start the agent
 CMD ./init.sh && gemini \
