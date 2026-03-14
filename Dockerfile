@@ -32,8 +32,10 @@ COPY --chown=researcher:researcher pyproject.toml uv.lock ./
 RUN uv sync
 
 # Pre-download Flash Attention kernels to avoid runtime rate limits and build stalls
-# We try to download the common variant; failures here are tolerated but warned
-RUN uv run python -c "from kernels import get_kernel; get_kernel('kernels-community/flash-attn3')" || echo "Kernel download skipped or failed"
+# We try to download the common variants; failures here are tolerated but warned
+RUN for kernel in "kernels-community/flash-attn3" "varunneal/flash-attention-3"; do \
+        uv run python -c "from kernels import get_kernel; get_kernel('$kernel')" || echo "Kernel download for '$kernel' skipped or failed" >&2; \
+    done
 
 # Copy prepare.py and run it to take advantage of Docker caching
 COPY --chown=researcher:researcher prepare.py ./
@@ -56,8 +58,8 @@ RUN sed -i 's|uv run train.py > run.log 2>&1|PYTHONUNBUFFERED=1 &; ./sync.sh|g' 
 # Instruct the agent to run training synchronously to avoid unproductive polling loops
 RUN echo "" >> program.md && echo "CRITICAL: Always run training commands synchronously in the foreground. Do NOT use is_background, nohup, or &. Wait for the command to complete, then read run.log for results." >> program.md
 
-# Instruct the agent to handle Flash Attention 3 incompatibility on Blackwell GPUs
-RUN echo "" >> program.md && echo "CRITICAL: Before running the baseline, check the GPU compute capability with \`python3 -c \"import torch; print(torch.cuda.get_device_capability())\"\`. If the major version is 10 or higher (e.g. Blackwell GPUs), Flash Attention 3 does NOT have compatible kernels. You MUST modify train.py to replace the FA3 attention call with torch.nn.functional.scaled_dot_product_attention (SDPA) BEFORE running any experiments. Do not wait for a CUDA error." >> program.md
+# Instruct the agent to select the correct Flash Attention kernel or fallback
+RUN echo -e "\nCRITICAL: Before running experiments, you must configure the correct attention mechanism based on the GPU architecture.\n1.  **Check GPU Capability**: Run \`python3 -c \"import torch; print(torch.cuda.get_device_capability())\"\`.\n2.  **Update \`train.py\`**:\n    *   **Blackwell GPUs** (capability major version 10+): You MUST use \`torch.nn.functional.scaled_dot_product_attention\` (SDPA), as Flash Attention is not compatible.\n    *   **Hopper GPUs** (capability \`(9, 0)\`): Use the \`varunneal/flash-attention-3\` package.\n    *   **Other GPUs** (e.g., Ampere with major version 8): Use the \`kernels-community/flash-attn3\` package.\nDo not wait for a CUDA error to make these changes." >> program.md
 
 # Start the agent
 CMD ./init.sh && gemini \
