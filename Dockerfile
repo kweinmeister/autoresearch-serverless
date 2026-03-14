@@ -65,8 +65,8 @@ CRITICAL: Before running experiments, you must configure the correct attention m
 1.  **Check GPU Capability**: Run `python3 -c "import torch; print(torch.cuda.get_device_capability())"`.
 2.  **Update `train.py`**:
     *   For **Blackwell GPUs** (capability major version 10+), Flash Attention is not compatible. You MUST use `torch.nn.functional.scaled_dot_product_attention` (SDPA).
-    *   For **Hopper GPUs** (capability `(9, 0)`), use the 'varunneal/flash-attention-3' package.
-    *   For all **other supported GPUs** (e.g., Ampere with major version 8), use the 'kernels-community/flash-attn3' package.
+    *   For **Hopper GPUs** (capability `(9, 0)`), use the `varunneal/flash-attention-3` package.
+    *   For all **other supported GPUs** (e.g., Ampere with major version 8), use the `kernels-community/flash-attn3` package.
 Do not wait for a CUDA error to make these changes.
 EOF
 
