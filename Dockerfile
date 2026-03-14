@@ -33,7 +33,8 @@ RUN uv sync
 
 # Pre-download Flash Attention kernels to avoid runtime rate limits and build stalls
 # We try to download the common variants; failures here are tolerated but warned
-RUN uv run python -c "from kernels import get_kernel; get_kernel('kernels-community/flash-attn3'); get_kernel('varunneal/flash-attention-3')" || echo "Kernel download skipped or failed"
+RUN uv run python -c "from kernels import get_kernel; get_kernel('kernels-community/flash-attn3')" || echo "Kernel download for 'kernels-community/flash-attn3' skipped or failed"
+RUN uv run python -c "from kernels import get_kernel; get_kernel('varunneal/flash-attention-3')" || echo "Kernel download for 'varunneal/flash-attention-3' skipped or failed"
 
 # Copy prepare.py and run it to take advantage of Docker caching
 COPY --chown=researcher:researcher prepare.py ./
@@ -63,7 +64,7 @@ CRITICAL: Before running experiments, you must configure the correct attention m
 1.  **Check GPU Capability**: Run `python3 -c "import torch; print(torch.cuda.get_device_capability())"`.
 2.  **Update `train.py`**:
     *   For **Hopper GPUs** (capability `(9, 0)`), use the 'varunneal/flash-attention-3' package.
-    *   For **older GPUs**, use the 'kernels-community/flash-attn3' package.
+    *   For **other GPUs** (e.g., with capability major version < 9), use the 'kernels-community/flash-attn3' package.
     *   For **Blackwell GPUs** (capability major version 10+), Flash Attention is not compatible. You MUST use `torch.nn.functional.scaled_dot_product_attention` (SDPA).
 Do not wait for a CUDA error to make these changes.
 EOF
