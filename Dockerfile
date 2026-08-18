@@ -65,4 +65,4 @@ RUN printf "\nCRITICAL: Before running experiments, you must configure the corre
 CMD ./init.sh && gemini \
     --prompt "Hi have a look at program.md and let's kick off a new experiment!" \
     --yolo \
-    --model gemini-3-flash-preview
+    --model gemini-3.7-flash
